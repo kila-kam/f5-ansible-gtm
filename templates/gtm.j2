@@ -1,0 +1,5 @@
+---
+{% for item in parsed_gtm_pool_stats %}
+{{ item['serverName']['description'] }}, {{ item['poolName']['description'] }}, {{ item['vsName']['description'] }}, {{ item['status.statusReason']['description'] }}
+{% endfor %}
+

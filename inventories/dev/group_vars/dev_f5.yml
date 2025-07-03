@@ -1,0 +1,9 @@
+iteration_pause_seconds: 2
+retry_count: 5
+retry_delay: 3
+partition: Common
+
+match_word: secondary
+gslb_wip:
+ - auction.f5demo.wip.com
+ - vlab.f5demo.wip.com

@@ -1,0 +1,70 @@
+---
+- name: test-local-data 
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  
+  
+  tasks:
+  - name: Load JSON file and set as fact
+    set_fact:
+      my_json_data: "{{ lookup('file', 'test-combined_pools.json') | from_json }}"
+    
+  - name: show my_json_data
+    debug: 
+      var: my_json_data.availability_check
+
+  - name: Readable log of GTM WIPs, pools, and disable candidate status
+    debug:
+      msg: |
+        WIP: {{ item.item.wip }}
+        Pool: {{ item.item.pool }}
+        Disable Candidate: {{ disable_member.name if disable_member.name is defined else 'None' }}
+        Both Members Available: {{ item.ansible_facts.both_available }}
+        Members:
+        {% for member in item.item.members %}
+          - Name: {{ member.name }}
+            Device: {{ member.device_name }}
+            Availability: {{ member.availability }}
+            Enabled: {{ member.enabled }}
+            Is Secondary: {{ 'Yes' if match_word in member.name | lower else 'No' }}
+            Will Be Disabled: {{ 'Yes' if (match_word in member.name | lower) and item.ansible_facts.both_available else 'No' }}
+            {% endfor %}
+    loop: "{{  my_json_data.availability_check.results }}"
+    loop_control:
+      label: "{{ item.item.pool }}"
+    vars:
+      match_word: secondary
+      disable_member: >-
+        {{
+          (
+            item.item.members
+            | selectattr('name', 'defined')
+            | selectattr('name', 'match', '(?i).*' + match_word + '.*')
+            | list
+          )[0] | default({})
+        }}
+
+  - name: Log GTM pools and secondary disable eligibility
+    debug:
+      msg: |
+        Pool: {{ item.item.pool }}
+        WIP: {{ item.item.wip }}
+        Both Members Available: {{ item.ansible_facts.both_available }}
+        Secondary Member Found: {{ disable_member.name if disable_member.name is defined else 'None' }}
+        Eligible for Disable: {{ 'YES' if item.ansible_facts.both_available and (disable_member.name is defined) else 'NO' }}
+    loop: "{{ my_json_data.availability_check.results  }}"
+    loop_control:
+      label: "{{ item.item.pool }}"
+    vars:
+      match_word: secondary
+      disable_member: >-
+        {{
+          (
+            item.item.members
+            | selectattr('name', 'defined')
+            | selectattr('name', 'match', '(?i).*' + match_word + '.*')
+            | list
+          )[0] | default({})
+        }}
+  

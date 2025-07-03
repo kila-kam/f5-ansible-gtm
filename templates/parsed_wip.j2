@@ -1,0 +1,15 @@
+---
+{% set pool_list = [] %}
+{% for result  in output['results'] %}
+{% for wip  in gslb_wip %}
+{% if wip == result['json']['name'] %}
+{%  do pool_list.append(result['json']['pools'][0]['name']) %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{ 
+   'result': {{ pool_list | unique }}
+
+ }
+
+

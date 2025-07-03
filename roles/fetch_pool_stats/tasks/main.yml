@@ -1,0 +1,30 @@
+---
+# fetch_pool_stats.yml
+# Expects variables: pool_list, ansible_host, partition, bigip_auth_token, iteration_pause_seconds, retry_count, retry_delay
+
+# fetch_pool_stats.yml
+# Expects: pool_name, ansible_host, partition, bigip_auth_token, iteration_pause_seconds, retry_count, retry_delay
+
+- name: Retrieve pool member stats for {{ pool_name }}
+  uri:
+    url: "https://{{ ansible_host }}/mgmt/tm/gtm/pool/a/~{{ partition }}~{{ pool_name }}/members/stats"
+    method: GET
+    validate_certs: false
+    headers:
+      X-F5-Auth-Token: "{{ bigip_auth_token }}"
+    timeout: 30
+  delegate_to: localhost
+  register: pool_stats_response
+  until: pool_stats_response.status in [200, 201]
+  retries: "{{ retry_count }}"
+  delay: "{{ retry_delay }}"
+  failed_when: pool_stats_response.status not in [200, 201]
+
+- name: Append pool stats response
+  set_fact:
+    pool_stats_responses: "{{ pool_stats_responses | default([]) + [pool_stats_response] }}"
+
+- name: Pause between stats requests
+  pause:
+    seconds: "{{ iteration_pause_seconds }}"
+

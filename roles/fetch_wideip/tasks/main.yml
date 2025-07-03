@@ -1,0 +1,27 @@
+---
+# fetch_wideip.yml
+# Expects variables: gslb_wip (list), ansible_host, partition, bigip_auth_token, iteration_pause_seconds, retry_count, retry_delay
+
+- name: Fetch WideIP info for {{ gslb_wip_item }}
+  uri:
+    url: "https://{{ ansible_host }}/mgmt/tm/gtm/wideip/a/~{{ partition }}~{{ gslb_wip_item }}"
+    method: GET
+    validate_certs: false
+    headers:
+      X-F5-Auth-Token: "{{ bigip_auth_token }}"
+    timeout: 30
+  delegate_to: localhost
+  register: wideip_response
+  until: wideip_response.status in [200, 201]
+  retries: "{{ retry_count }}"
+  delay: "{{ retry_delay }}"
+  failed_when: wideip_response.status not in [200, 201]
+
+- name: Save WideIP result
+  set_fact:
+    wideip_responses: "{{ wideip_responses + [wideip_response] }}"
+
+- name: Pause between iterations
+  pause:
+    seconds: "{{ iteration_pause_seconds }}"
+

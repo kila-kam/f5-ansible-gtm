@@ -1,0 +1,41 @@
+---
+# tasks file for f5_rest_logins
+
+ - name: Get credentials
+   set_fact:
+     ansible_user: "{{ lookup('env', 'ANSIBLE_NET_USERNAME')}}"
+     ansible_password: "{{ lookup('env', 'ANSIBLE_NET_PASSWORD' )}}"
+   failed_when:
+    - not ansible_user
+    - not ansible_password
+   no_log: false
+   tags: audit
+   
+ - name: login to F5 via REST API 
+   uri:
+     url: https://{{ ansible_host }}/mgmt/shared/authn/login
+     method: POST
+     body_format: json
+     validate_certs: false
+     body:
+       username: "{{ ansible_user }}"
+       password: "{{ ansible_password }}"
+       loginProviderName: "tmos"
+   register: login
+   delegate_to: localhost
+
+ - name:  Save F5 token fact
+   set_fact:
+     bigip_auth_token: "{{ login.json.token.token }}"
+
+ - name: Extend lifetime of F5 token 
+   uri:
+     url: https://{{ ansible_host }}/mgmt/shared/authz/tokens/{{bigip_auth_token}}
+     headers:
+       X-F5-Auth-Token: "{{ bigip_auth_token }}"
+     method: PATCH
+     body_format: json
+     body:
+       timeout: "14400" 
+     validate_certs: false
+   delegate_to: localhost

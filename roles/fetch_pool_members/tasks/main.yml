@@ -1,0 +1,25 @@
+# fetch_pool_members.yml
+# Expects vars: pool_name, ansible_host, partition, bigip_auth_token, iteration_pause_seconds, retry_count, retry_delay
+
+- name: Retrieve pool members for {{ pool_name }}
+  uri:
+    url: "https://{{ ansible_host }}/mgmt/tm/gtm/pool/a/~{{ partition }}~{{ pool_name }}/members"
+    method: GET
+    validate_certs: false
+    headers:
+      X-F5-Auth-Token: "{{ bigip_auth_token }}"
+    timeout: 30
+  delegate_to: localhost
+  register: pool_member_response
+  until: pool_member_response.status in [200, 201]
+  retries: "{{ retry_count }}"
+  delay: "{{ retry_delay }}"
+  failed_when: pool_member_response.status not in [200, 201]
+
+- name: Append pool member response for {{ pool_name }}
+  set_fact:
+    pool_members_responses: "{{ pool_members_responses | default([]) + [pool_member_response] }}"
+
+- name: Pause between pool member requests
+  pause:
+    seconds: "{{ iteration_pause_seconds }}"

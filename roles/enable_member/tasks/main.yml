@@ -1,0 +1,29 @@
+---
+# enable_member.yml
+# Expects variables: availability_check, ansible_host, partition, bigip_auth_token, iteration_pause_seconds, retry_count, retry_delay
+
+- name: Enable secondary GTM pool member if currently disabled with pause and retries
+  block:
+    - name: Enable secondary member
+      uri:
+        url: >-
+          https://{{ ansible_host }}/mgmt/tm/gtm/pool/a/~{{ partition }}~{{ item.pool }}/members/~{{ partition }}~{{ item.secondary_member.device_name }}:~{{ partition }}~{{ item.secondary_member.name }}
+        method: PATCH
+        headers:
+          X-F5-Auth-Token: "{{ bigip_auth_token }}"
+          Content-Type: application/json
+        validate_certs: false
+        body: '{"enabled": true}'
+        body_format: json
+      when:
+        - item.secondary_member is defined
+        - item.secondary_member != {}
+        - item.secondary_member.enabled == 'disabled' or item.secondary_member.enabled == 'false' or item.secondary_member.enabled == false
+      register: enable_response
+      until: enable_response.status in [200, 201]
+      retries: "{{ retry_count }}"
+      delay: "{{ retry_delay }}"
+      failed_when: enable_response.status not in [200, 201]
+    - name: Pause for iteration gap after enabling member
+      pause:
+        seconds: "{{ iteration_pause_seconds }}"

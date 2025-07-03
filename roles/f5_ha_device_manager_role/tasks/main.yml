@@ -1,0 +1,72 @@
+---
+# tasks file for f5_ha_device_manager_role
+
+- name: Collect device group information for host
+  bigip_device_info:
+    gather_subset:
+     - device-groups
+    provider:
+      server: "{{ ansible_host }}"
+      user: "{{ ansible_user }}"
+      password: "{{ ansible_password }}"
+      server_port: 443
+      validate_certs: false
+      no_f5_teem: true
+  register: device_group_info
+  delegate_to: localhost
+
+#- name: debug output
+#  debug: 
+#    var: device_group_info
+
+- name: debug output
+  set_fact: 
+    raw_devices:  "{{ item.devices }}"
+    auto_sync: "{{ item.autosync_enabled }}"
+    sync_group: "{{ item.name }}"
+  loop:  "{{ device_group_info.device_groups }}"
+  when: item.type =="sync-failover"
+  delegate_to: localhost
+  tags: audit
+
+- name: Fail if not a HA pair
+  fail:
+    msg: "Sync failover group not found, not a HA pair"
+  when: raw_devices is not defined
+  delegate_to: localhost
+  tags: audit
+
+
+- name: Collect device information for the F5
+  bigip_device_info:
+    gather_subset:
+     - devices
+    provider:
+      server: "{{ ansible_host }}"
+      user: "{{ ansible_user }}"
+      password: "{{ ansible_password }}"
+      server_port: 443
+      validate_certs: false
+      no_f5_teem: true
+  register: device_info
+  delegate_to: localhost
+
+- name: Show device info
+  debug:
+    var: device_info.devices
+
+- name: Get the active device IP
+  set_fact:
+    active_f5_ip: "{{item.management_address }}"
+    active_f5_hostname: "{{ item.hostname }}"
+  loop: "{{ device_info.devices }}"
+  when: item.failover_state =="active"
+  delegate_to: localhost
+
+- name: Get the standby device IP
+  set_fact:
+    standby_f5_ip: "{{ item.management_address }}"
+    standby_f5_hostname: "{{ item.hostname }}"
+  loop: "{{ device_info.devices }}"
+  when: item.failover_state =="standby"
+  delegate_to: localhost

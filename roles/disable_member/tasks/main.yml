@@ -1,0 +1,31 @@
+---
+# disable_member.yml
+# Expects variables: availability_check, ansible_host, partition, bigip_auth_token, iteration_pause_seconds, retry_count, retry_delay
+
+# disable_member.yml
+# Expects: current_item, ansible_host, partition, bigip_auth_token, iteration_pause_seconds, retry_count, retry_delay
+
+- name: Disable secondary member if eligible with retries
+  uri:
+    url: >-
+      https://{{ ansible_host }}/mgmt/tm/gtm/pool/a/~{{ partition }}~{{ current_item.pool }}/members/~{{ partition }}~{{ current_item.secondary_member.device_name }}:~{{ partition }}~{{ current_item.secondary_member.name }}
+    method: PATCH
+    headers:
+      X-F5-Auth-Token: "{{ bigip_auth_token }}"
+      Content-Type: application/json
+    validate_certs: false
+    body: '{"disabled": true}'
+    body_format: json
+  when:
+    - current_item.both_available
+    - current_item.secondary_member is defined
+    - current_item.secondary_member != {}
+  register: disable_response
+  until: disable_response.status in [200, 201]
+  retries: "{{ retry_count }}"
+  delay: "{{ retry_delay }}"
+  failed_when: disable_response.status not in [200, 201]
+
+- name: Pause for iteration gap after disabling member
+  pause:
+    seconds: "{{ iteration_pause_seconds }}"
