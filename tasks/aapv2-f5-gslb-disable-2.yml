@@ -8,6 +8,10 @@
     wideip_responses: []
     combined_pools: []
 
+
+  vars_files:
+    - test_data.yml
+
   tasks:
 
   - name: Get credentials from environment

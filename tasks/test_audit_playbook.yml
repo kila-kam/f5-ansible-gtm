@@ -1,0 +1,55 @@
+---
+- name: gslb wip audit and secondary member disable
+  hosts: dev_f5
+  connection: local
+  gather_facts: true
+
+  vars_files:
+    - test_data.yml  # ← loads your prepared static test data
+
+  tasks:
+  - name: Extract pool names from WideIP responses
+    # This extracts the first pool name from each wideip response json
+    set_fact:
+      pool_list: >-
+        {{
+          wideip_responses
+          | map(attribute='json')
+          | selectattr('name', 'in', gslb_wip)
+          | map(attribute='pools')
+          | map('first')
+          | map(attribute='name')
+          | list
+          | unique
+        }}
+
+  - name: Combine pool members with availability and enabled status
+    # Builds enriched member details per pool with availability/enabled
+    set_fact:
+      combined_pools: "{{ combined_pools | default([]) + [combined_entry] }}"
+    vars:
+      wip_name: "{{ gslb_wip[item] }}"
+      pool_name: "{{ pool_list[item] }}"
+      members: "{{ pool_members_responses[item]['json']['items'] }}"
+      stats: "{{ pool_stats_responses[item].json.entries }}"
+      combined_entry:
+        wip: "{{ wip_name }}"
+        pool: "{{ pool_name }}"
+        members: >-
+          {%- set enriched_members = [] -%}
+          {%- for member in members -%}
+            {# Construct the stats API path for each member #}
+            {%- set stat_path = 'https://localhost/mgmt/tm/gtm/pool/a/~Common~' ~ pool_name ~ '/members/~Common~' ~ member.name ~ ':~Common~' ~ member.subPath.split(':')[0] ~ '/stats' -%}
+            {%- set stat = stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) -%}
+            {%- set enriched = {
+              'name': member.name,
+              'device_name': member.subPath.split(':')[0],
+              'availability': stat.get('status.availabilityState', {}).get('description', 'unknown'),
+              'enabled': stat.get('status.enabledState', {}).get('description', 'unknown')
+            } -%}
+            {%- do enriched_members.append(enriched) -%}
+          {%- endfor -%}
+          {{ enriched_members }}
+    loop: "{{ range(0, pool_list | length) | list }}"
+    loop_control:
+      label: "{{ pool_list[item] }}"
