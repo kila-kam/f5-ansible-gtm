@@ -1,0 +1,171 @@
+---
+- name: gslb wip audit and secondary member disable
+  hosts: dev_f5
+  connection: local
+  gather_facts: true
+
+  vars:
+    wideip_responses: []
+    combined_pools: []
+
+  tasks:
+
+  - name: Get credentials from environment
+    set_fact:
+      ansible_user: "{{ lookup('env', 'ANSIBLE_NET_USERNAME') }}"
+      ansible_password: "{{ lookup('env', 'ANSIBLE_NET_PASSWORD') }}"
+    failed_when:
+      - ansible_user is not defined or ansible_user == ''
+      - ansible_password is not defined or ansible_password == ''
+    no_log: true
+
+  - name: Authenticate to BIG-IP GTM
+    include_role:
+      name: f5_rest_login
+
+  - name: Include WideIP fetch task
+    include_role: 
+      name: fetch_wideip
+    loop: "{{ gslb_wip }}"
+    loop_control:
+      label: "{{ item }}"
+    vars:
+      gslb_wip_item: "{{ item }}"
+
+  - name: Extract pool names from WideIP responses
+    set_fact:
+      pool_list: >-
+        {{
+          wideip_responses
+          | map(attribute='json')
+          | selectattr('name', 'in', gslb_wip)
+          | map(attribute='pools')
+          | map('first')
+          | map(attribute='name')
+          | list
+          | unique
+        }}
+
+  - name: Include pool members fetch task
+    include_role:
+      name: fetch_pool_members
+    loop: "{{ pool_list }}"
+    loop_control:
+      label: "{{ item }}"
+    vars:
+      pool_name: "{{ item }}"
+
+  - name: Include pool stats fetch task
+    include_role:
+      name: fetch_pool_stats
+    loop: "{{ pool_list }}"
+    loop_control:
+      label: "{{ item }}"
+    vars:
+      pool_name: "{{ item }}"
+
+  - name: Build combined_pools without block+loop or custom filters
+    set_fact:
+      combined_pools: "{{ combined_pools + [combined_entry] }}"
+    vars:
+      pool_index: "{{ item }}"
+      wip_name: "{{ gslb_wip[pool_index] }}"
+      pool_name: "{{ pool_list[pool_index] }}"
+      members: "{{ pool_members_responses[pool_index]['json']['items'] }}"
+      stats: "{{ pool_stats_responses[pool_index].json.entries }}"
+      enriched_members: >-
+        {%- set enriched = [] -%}
+        {%- for member in members -%}
+          {%- set subpath = member.subPath -%}
+          {%- set device_name = subpath.split(':')[0] if ':' in subpath else subpath -%}
+          {%- set stat_path = 'https://localhost/mgmt/tm/gtm/pool/a/~Common~' ~ pool_name ~ '/members/~Common~' ~ member.name ~ ':~Common~' ~ device_name ~ '/stats' -%}
+          {%- set stat = stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) -%}
+          {%- set enriched = enriched + [ {
+            'name': member.name,
+            'device_name': device_name,
+            'availability': stat.get('status.availabilityState', {}).get('description', 'unknown'),
+            'enabled': stat.get('status.enabledState', {}).get('description', 'unknown')
+          } ] -%}
+        {%- endfor -%}
+        {{ enriched }}
+      combined_entry:
+        wip: "{{ wip_name }}"
+        pool: "{{ pool_name }}"
+        members: "{{ enriched_members }}"
+    loop: "{{ range(0, pool_list | length) | list }}"
+    loop_control:
+      loop_var: item
+
+  - name: Show combined_pools for verification
+    debug:
+      var: combined_pools
+
+
+
+
+  - name: Initialize availability_check
+    set_fact:
+      availability_check: []
+
+  - name: Determine availability and disable eligibility for secondary members (loop)
+    set_fact:
+      availability_check: "{{ availability_check + [ new_entry ] }}"
+    vars:
+      new_entry: >-
+        {{
+          pool_item | combine({
+            'both_available': (pool_item.members | selectattr('availability', 'equalto', 'available') | list | length) == 2,
+            'secondary_member': (
+              pool_item.members
+              | selectattr('name', 'defined')
+              | selectattr('name', 'search', '(?i).*' + match_word + '.*')
+              | list
+            )[0] | default({})
+          })
+        }}
+    loop: "{{ combined_pools }}"
+    loop_control:
+      loop_var: pool_item
+      label: "{{ pool_item.pool }}"
+
+  - name: Debug availability_check
+    debug:
+      var: availability_check
+
+  - name: Log GTM pools with eligibility for secondary member disable
+    debug:
+      msg: |
+        Pool: {{ item.pool }}
+        WIP: {{ item.wip }}
+        Both Members Available: {{ item.both_available }}
+        Secondary Member Found: {{ item.secondary_member.name if item.secondary_member.name is defined else 'None' }}
+        Eligible for Disable: {{ 'YES' if item.both_available and (item.secondary_member.name is defined) else 'NO' }}
+    loop: "{{ availability_check }}"
+    loop_control:
+      label: "{{ item.pool }}"
+
+  - name: Include disable member task for each eligible pool
+    include_role:
+      name: disable_member
+    loop: "{{ availability_check }}"
+    loop_control:
+      label: "{{ item.pool }}"
+    vars:
+      current_item: "{{ item }}"
+
+  - name: Include post-disable verification task
+    include_role:
+      name: post_disable_check
+
+  - name: Assert secondary member is disabled after patch
+    assert:
+      that:
+        - item.json.disabled == true
+      fail_msg: "Secondary pool member {{ item.json.name }} in pool {{ item.json.poolName | default('unknown') }} is NOT disabled!"
+      success_msg: "Confirmed secondary pool member {{ item.json.name }} is successfully disabled."
+    loop: "{{ post_check_response.results }}"
+    loop_control:
+      label: "Validate disable: {{ item.json.name | default('unknown') }}"
+    when: 
+     - post_check_response is defined
+     - "'json' in item"

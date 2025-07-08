@@ -1,0 +1,69 @@
+# test_data.yml
+
+gslb_wip:
+  - "wip1.test.com"
+  - "wip2.test.com"
+
+wideip_responses:
+  - json:
+      name: "wip1.test.com"
+      pools:
+        - name: "pool1"
+  - json:
+      name: "wip2.test.com"
+      pools:
+        - name: "pool2"
+
+pool_list:
+  - "pool1"
+  - "pool2"
+
+pool_members_responses:
+  - json:
+      items:
+        - name: "server1"
+          subPath: "device1:80"
+        - name: "server2"
+          subPath: "device2:80"
+  - json:
+      items:
+        - name: "server3"
+          subPath: "device3:80"
+        - name: "server4"
+          subPath: "device4:80"
+
+pool_stats_responses:
+  - json:
+      entries:
+        "https://localhost/mgmt/tm/gtm/pool/a/~Common~pool1/members/~Common~server1:~Common~device1/stats":
+          nestedStats:
+            entries:
+              status.availabilityState:
+                description: "available"
+              status.enabledState:
+                description: "enabled"
+        "https://localhost/mgmt/tm/gtm/pool/a/~Common~pool1/members/~Common~server2:~Common~device2/stats":
+          nestedStats:
+            entries:
+              status.availabilityState:
+                description: "unavailable"
+              status.enabledState:
+                description: "disabled"
+  - json:
+      entries:
+        "https://localhost/mgmt/tm/gtm/pool/a/~Common~pool2/members/~Common~server3:~Common~device3/stats":
+          nestedStats:
+            entries:
+              status.availabilityState:
+                description: "available"
+              status.enabledState:
+                description: "enabled"
+        "https://localhost/mgmt/tm/gtm/pool/a/~Common~pool2/members/~Common~server4:~Common~device4/stats":
+          nestedStats:
+            entries:
+              status.availabilityState:
+                description: "available"
+              status.enabledState:
+                description: "disabled"
+
+match_word: "server2"
