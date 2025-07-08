@@ -1,6 +1,6 @@
 ---
 - name: gslb wip audit and secondary member disable
-  hosts: dev_f5
+  hosts: localhost
   connection: local
   gather_facts: true
 
