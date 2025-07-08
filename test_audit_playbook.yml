@@ -23,6 +23,11 @@
           | unique
         }}
 
+
+  - name: Show pools
+    debug:
+      var: pool_list
+
   - name: Combine pool members with availability and enabled status
     # Builds enriched member details per pool with availability/enabled
     set_fact:
@@ -53,3 +58,8 @@
     loop: "{{ range(0, pool_list | length) | list }}"
     loop_control:
       label: "{{ pool_list[item] }}"
+
+
+  - name: show combined data
+    debug:
+      var: combined_pools
