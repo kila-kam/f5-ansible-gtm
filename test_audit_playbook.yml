@@ -28,37 +28,70 @@
     debug:
       var: pool_list
 
-  - name: Combine pool members with availability and enabled status
-    # Builds enriched member details per pool with availability/enabled
+  #- name: Combine pool members with availability and enabled status
+  #  # Builds enriched member details per pool with availability/enabled
+  #  set_fact:
+  #    combined_pools: "{{ combined_pools | default([]) + [combined_entry] }}"
+  #  vars:
+  #    wip_name: "{{ gslb_wip[item] }}"
+  #    pool_name: "{{ pool_list[item] }}"
+  #    members: "{{ pool_members_responses[item]['json']['items'] }}"
+  #    stats: "{{ pool_stats_responses[item].json.entries }}"
+  #    combined_entry:
+  #      wip: "{{ wip_name }}"
+  #      pool: "{{ pool_name }}"
+  #      members: >-
+  #        {%- set enriched_members = [] -%}
+  #        {%- for member in members -%}
+  #          {# Construct the stats API path for each member #}
+  #          {%- set stat_path = 'https://localhost/mgmt/tm/gtm/pool/a/~Common~' ~ pool_name ~ '/members/~Common~' ~ member.name ~ ':~Common~' ~ member.subPath.split(':')[0] ~ '/stats' -%}
+  #          {%- set stat = stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) -%}
+  #          {%- set enriched = {
+  #            'name': member.name,
+  #            'device_name': member.subPath.split(':')[0],
+  #            'availability': stat.get('status.availabilityState', {}).get('description', 'unknown'),
+  #            'enabled': stat.get('status.enabledState', {}).get('description', 'unknown')
+  #          } -%}
+  #          {%- do enriched_members.append(enriched) -%}
+  #        {%- endfor -%}
+  #        {{ enriched_members }}
+  #  loop: "{{ range(0, pool_list | length) | list }}"
+  #  loop_control:
+  #    label: "{{ pool_list[item] }}"
+
+
+
+  - name: Build combined_pools without block+loop or custom filters
     set_fact:
-      combined_pools: "{{ combined_pools | default([]) + [combined_entry] }}"
+      combined_pools: "{{ combined_pools + [combined_entry] }}"
     vars:
-      wip_name: "{{ gslb_wip[item] }}"
-      pool_name: "{{ pool_list[item] }}"
-      members: "{{ pool_members_responses[item]['json']['items'] }}"
-      stats: "{{ pool_stats_responses[item].json.entries }}"
+      pool_index: "{{ item }}"
+      wip_name: "{{ gslb_wip[pool_index] }}"
+      pool_name: "{{ pool_list[pool_index] }}"
+      members: "{{ pool_members_responses[pool_index]['json']['items'] }}"
+      stats: "{{ pool_stats_responses[pool_index].json.entries }}"
+      enriched_members: >-
+        {%- set enriched = [] -%}
+        {%- for member in members -%}
+          {%- set subpath = member.subPath -%}
+          {%- set device_name = subpath.split(':')[0] if ':' in subpath else subpath -%}
+          {%- set stat_path = 'https://localhost/mgmt/tm/gtm/pool/a/~Common~' ~ pool_name ~ '/members/~Common~' ~ member.name ~ ':~Common~' ~ device_name ~ '/stats' -%}
+          {%- set stat = stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) -%}
+          {%- set enriched = enriched + [ {
+            'name': member.name,
+            'device_name': device_name,
+            'availability': stat.get('status.availabilityState', {}).get('description', 'unknown'),
+            'enabled': stat.get('status.enabledState', {}).get('description', 'unknown')
+          } ] -%}
+        {%- endfor -%}
+        {{ enriched }}
       combined_entry:
         wip: "{{ wip_name }}"
         pool: "{{ pool_name }}"
-        members: >-
-          {%- set enriched_members = [] -%}
-          {%- for member in members -%}
-            {# Construct the stats API path for each member #}
-            {%- set stat_path = 'https://localhost/mgmt/tm/gtm/pool/a/~Common~' ~ pool_name ~ '/members/~Common~' ~ member.name ~ ':~Common~' ~ member.subPath.split(':')[0] ~ '/stats' -%}
-            {%- set stat = stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) -%}
-            {%- set enriched = {
-              'name': member.name,
-              'device_name': member.subPath.split(':')[0],
-              'availability': stat.get('status.availabilityState', {}).get('description', 'unknown'),
-              'enabled': stat.get('status.enabledState', {}).get('description', 'unknown')
-            } -%}
-            {%- do enriched_members.append(enriched) -%}
-          {%- endfor -%}
-          {{ enriched_members }}
+        members: "{{ enriched_members }}"
     loop: "{{ range(0, pool_list | length) | list }}"
     loop_control:
-      label: "{{ pool_list[item] }}"
-
+      loop_var: item
 
   - name: show combined data
     debug:
