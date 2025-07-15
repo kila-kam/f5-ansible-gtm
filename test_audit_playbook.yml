@@ -28,6 +28,28 @@
     debug:
       var: pool_list
 
+
+- name: Debug for each member enrichment
+  debug:
+    msg:
+      - "item: {{ item }}"
+      - "pool_name: {{ pool_name }}"
+      - "member: {{ member.name }} | subPath: {{ member.subPath }}"
+      - "device_name: {{ device_name }}"
+      - "constructed stat_path: {{ stat_path }}"
+      - "stat found: {{ stat }}"
+  loop: "{{ members }}"
+  loop_control:
+    label: "{{ member.name }}"
+  vars:
+    members: "{{ pool_members_responses[item]['json']['items'] }}"
+    stats: "{{ pool_stats_responses[item].json.entries }}"
+    subpath: "{{ member.subPath }}"
+    device_name: "{{ subpath.split(':')[0] if ':' in subpath else subpath }}"
+    stat_path: "https://localhost/mgmt/tm/gtm/pool/a/~Common~{{ pool_name }}/members/~Common~{{ member.name }}:~Common~{{ device_name }}/stats"
+    stat: "{{ stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) }}"
+
+
   #- name: Combine pool members with availability and enabled status
   #  # Builds enriched member details per pool with availability/enabled
   #  set_fact:
@@ -70,11 +92,10 @@
     set_fact:
       combined_pools: "{{ combined_pools | default([])+ [combined_entry] }}"
     vars:
-      pool_index: "{{ item }}"
-      wip_name: "{{ gslb_wip[pool_index] }}"
-      pool_name: "{{ pool_list[pool_index] }}"
-      members: "{{ pool_members_responses[pool_index]['json']['items'] }}"
-      stats: "{{ pool_stats_responses[pool_index].json.entries }}"
+      wip_name: "{{ gslb_wip[item] }}"
+      pool_name: "{{ pool_list[item] }}"
+      members: "{{ pool_members_responses[item]['json']['items'] }}"
+      stats: "{{ pool_stats_responses[item].json.entries }}"
       enriched_members: >-
         {%- set enriched = [] -%}
         {%- for member in members -%}
