@@ -6,7 +6,7 @@
 
   vars:
     wideip_responses: []
-    selected_wip: auction  # default, can be overridden via -e or survey
+ 
 
   tasks:
   - name: Get credentials from environment

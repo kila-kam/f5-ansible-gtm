@@ -1,5 +1,5 @@
 ---
-- name: gslb wip audit and secondary member disable
+- name: gslb wip audit and secondary member enable
   hosts: dev_f5
   connection: local
   gather_facts: true
@@ -128,26 +128,22 @@
       var: combined_pools
     tags: audit
 
-  - name: Initialize availability_check
+  - name: Determine disabled secondary members for enabling
     set_fact:
-      availability_check: []
-    tags: audit
-
-  - name: Determine availability and disable eligibility for secondary members
-    set_fact:
-      availability_check: "{{ availability_check + [ new_entry ] }}"
+      availability_check: "{{ availability_check | default([]) + [ new_entry ] }}"
     vars:
       new_entry: >-
         {{
-          pool_item | combine({
-            'both_available': (pool_item.members | selectattr('availability', 'equalto', 'available') | list | length) == 2,
-            'secondary_member': (
-              pool_item.members
-              | selectattr('name', 'defined')
-              | selectattr('name', 'search', '(?i).*' + match_word + '.*')
-              | list
-            )[0] | default({})
-          })
+          pool_item
+          | combine({
+              'secondary_member': (
+                pool_item.members
+                | selectattr('name', 'defined')
+                | selectattr('name', 'search', '(?i).*' + match_word + '.*')
+                | selectattr('enabled', 'in', ['disabled', 'false', false])
+                | list
+              )[0] | default({})
+            })
         }}
     loop: "{{ combined_pools }}"
     loop_control:
@@ -155,48 +151,46 @@
       label: "{{ pool_item.pool }}"
     tags: audit
 
-  - name: Debug availability_check
-    debug:
-      var: availability_check
-    tags: audit
-
-  - name: Log GTM pools with eligibility for secondary member disable
+  - name: Log GTM pools with disabled secondary members for enabling
     debug:
       msg: |
         Pool: {{ item.pool }}
         WIP: {{ item.wip }}
-        Both Members Available: {{ item.both_available }}
         Secondary Member Found: {{ item.secondary_member.name if item.secondary_member.name is defined else 'None' }}
-        Eligible for Disable: {{ 'YES' if item.both_available and (item.secondary_member.name is defined) else 'NO' }}
+        Currently Enabled State: {{ item.secondary_member.enabled if item.secondary_member.enabled is defined else 'unknown' }}
+        Eligible for Enable: {{ 'YES' if item.secondary_member.name is defined else 'NO' }}
     loop: "{{ availability_check }}"
     loop_control:
       label: "{{ item.pool }}"
     tags: audit
 
-  - name: Include disable member task for each eligible pool
-    include_role:
-      name: disable_member
+  - name: Include enable member task
+    include_role: 
+      name: enable_member
     loop: "{{ availability_check }}"
     loop_control:
       label: "{{ item.pool }}"
-    vars:
-      current_item: "{{ item }}"
     tags: change
 
-  - name: Include post-disable verification task
-    include_role:
-      name: post_disable_check
+  - name: Include post-enable verification task
+    include_role: 
+      name: post_enable_check
     tags: change
 
-  - name: Assert secondary member is disabled after patch
+  - name: Debug post_check_response
+    debug:
+      var: post_check_response.results
+    tags: change
+
+  - name: Assert secondary member is enabled after patch
     assert:
       that:
-        - item.json.disabled == true
-      fail_msg: "Secondary pool member {{ item.json.name }} in pool {{ item.json.poolName | default('unknown') }} is NOT disabled!"
-      success_msg: "Confirmed secondary pool member {{ item.json.name }} is successfully disabled."
+        - (item.json.enabled | default(false)) == true
+      fail_msg: "Secondary pool member {{ item.json.name }} in pool {{ item.json.poolName | default('unknown') }} is NOT enabled!"
+      success_msg: "Confirmed secondary pool member {{ item.json.name }} is successfully enabled."
     loop: "{{ post_check_response.results }}"
     loop_control:
-      label: "Validate disable: {{ item.json.name | default('unknown') }}"
+      label: "Validate enable: {{ item.json.name  | default('unknown') }}"
     when: 
      - post_check_response is defined
      - "'json' in item"
