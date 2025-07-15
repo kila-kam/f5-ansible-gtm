@@ -23,11 +23,11 @@ pool_members_responses:
       items:
         - name: "server1"
           subPath: "device1:80"
-        - name: "server2"
+        - name: "server2-secondary"
           subPath: "device2:80"
   - json:
       items:
-        - name: "server3"
+        - name: "server3-SECONDARY"
           subPath: "device3:80"
         - name: "server4"
           subPath: "device4:80"
@@ -66,4 +66,4 @@ pool_stats_responses:
               status.enabledState:
                 description: "disabled"
 
-match_word: "server2"
+match_word: "secondary"
