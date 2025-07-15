@@ -7,9 +7,9 @@
   vars:
     wideip_responses: []
     combined_pools: []
+    selected_wip: auction  # default, can be overridden via -e or survey
 
   tasks:
-
   - name: Get credentials from environment
     set_fact:
       ansible_user: "{{ lookup('env', 'ANSIBLE_NET_USERNAME') }}"
@@ -19,9 +19,30 @@
       - ansible_password is not defined or ansible_password == ''
     no_log: true
 
+  - name: Validate selected_wip exists in wip_configs
+    assert:
+      that: "'{{ selected_wip }}' in wip_configs"
+      fail_msg: "Invalid selected_wip '{{ selected_wip }}'. Available options: {{ wip_configs.keys() | list }}"
+    tags: audit
+
+  - name: Set selected WIP configuration
+    set_fact:
+      gslb_wip: "{{ wip_configs[selected_wip].gslb_wip }}"
+      match_word: "{{ wip_configs[selected_wip].match_word }}"
+    tags: audit
+
+  - name: Debug selected WIP config
+    debug:
+      msg:
+        - "Selected WIP: {{ selected_wip }}"
+        - "gslb_wip: {{ gslb_wip }}"
+        - "match_word: {{ match_word }}" 
+    tags: audit
+
   - name: Authenticate to BIG-IP GTM
     include_role:
       name: f5_rest_login
+    tags: audit
 
   - name: Include WideIP fetch task
     include_role: 
@@ -31,6 +52,7 @@
       label: "{{ item }}"
     vars:
       gslb_wip_item: "{{ item }}"
+    tags: audit
 
   - name: Extract pool names from WideIP responses
     set_fact:
@@ -54,6 +76,7 @@
       label: "{{ item }}"
     vars:
       pool_name: "{{ item }}"
+    tags: audit
 
   - name: Include pool stats fetch task
     include_role:
@@ -63,8 +86,9 @@
       label: "{{ item }}"
     vars:
       pool_name: "{{ item }}"
+    tags: audit
 
-  - name: Build combined_pools without block+loop or custom filters
+  - name: Build combined_pools without block or custom filters
     set_fact:
       combined_pools: "{{ combined_pools + [combined_entry] }}"
     vars:
@@ -95,19 +119,19 @@
     loop: "{{ range(0, pool_list | length) | list }}"
     loop_control:
       loop_var: item
+    tags: audit
 
   - name: Show combined_pools for verification
     debug:
       var: combined_pools
-
-
-
+    tags: audit
 
   - name: Initialize availability_check
     set_fact:
       availability_check: []
+    tags: audit
 
-  - name: Determine availability and disable eligibility for secondary members (loop)
+  - name: Determine availability and disable eligibility for secondary members
     set_fact:
       availability_check: "{{ availability_check + [ new_entry ] }}"
     vars:
@@ -127,10 +151,12 @@
     loop_control:
       loop_var: pool_item
       label: "{{ pool_item.pool }}"
+    tags: audit
 
   - name: Debug availability_check
     debug:
       var: availability_check
+    tags: audit
 
   - name: Log GTM pools with eligibility for secondary member disable
     debug:
@@ -143,6 +169,7 @@
     loop: "{{ availability_check }}"
     loop_control:
       label: "{{ item.pool }}"
+    tags: audit
 
   - name: Include disable member task for each eligible pool
     include_role:
@@ -152,10 +179,12 @@
       label: "{{ item.pool }}"
     vars:
       current_item: "{{ item }}"
+    tags: change
 
   - name: Include post-disable verification task
     include_role:
       name: post_disable_check
+    tags: change
 
   - name: Assert secondary member is disabled after patch
     assert:
@@ -169,3 +198,4 @@
     when: 
      - post_check_response is defined
      - "'json' in item"
+    tags: change

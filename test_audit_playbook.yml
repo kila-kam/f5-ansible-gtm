@@ -63,7 +63,7 @@
 
   - name: Build combined_pools without block+loop or custom filters
     set_fact:
-      combined_pools: "{{ combined_pools + [combined_entry] }}"
+      combined_pools: "{{ combined_pools | default([])+ [combined_entry] }}"
     vars:
       pool_index: "{{ item }}"
       wip_name: "{{ gslb_wip[pool_index] }}"

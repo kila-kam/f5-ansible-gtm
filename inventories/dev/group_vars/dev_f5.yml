@@ -3,7 +3,18 @@ retry_count: 5
 retry_delay: 3
 partition: Common
 
-match_word: secondary
 gslb_wip:
  - auction.f5demo.wip.com
  - vlab.f5demo.wip.com
+
+match_word: secondary
+wip_configs:
+  auction:
+    gslb_wip:
+      - auction.f5demo.wip.com
+    match_word: secondary
+
+  vlab:
+    gslb_wip:
+      - vlab.f5demo.wip.com
+    match_word: secondary

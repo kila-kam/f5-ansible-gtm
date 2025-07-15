@@ -6,6 +6,7 @@
 
   vars:
     wideip_responses: []
+    selected_wip: auction  # default, can be overridden via -e or survey
 
   tasks:
   - name: Get credentials from environment
@@ -18,9 +19,30 @@
     no_log: true
     tags: audit
 
+  - name: Validate selected_wip exists in wip_configs
+    assert:
+      that: "'{{ selected_wip }}' in wip_configs"
+      fail_msg: "Invalid selected_wip '{{ selected_wip }}'. Available options: {{ wip_configs.keys() | list }}"
+    tags: audit
+
+  - name: Set selected WIP configuration
+    set_fact:
+      gslb_wip: "{{ wip_configs[selected_wip].gslb_wip }}"
+      match_word: "{{ wip_configs[selected_wip].match_word }}"
+    tags: audit
+
+  - name: Debug selected WIP config
+    debug:
+      msg:
+        - "Selected WIP: {{ selected_wip }}"
+        - "gslb_wip: {{ gslb_wip }}"
+        - "match_word: {{ match_word }}" 
+    tags: audit
+
   - name: Authenticate to BIG-IP GTM
     include_role:
       name: f5_rest_login
+    tags: audit
 
   - name: Include WideIP fetch task
     include_role: 
@@ -30,6 +52,7 @@
       label: "{{ item }}"
     vars:
       gslb_wip_item: "{{ item }}"
+    tags: audit
 
   - name: Extract pool names from WideIP responses
     set_fact:
@@ -44,6 +67,7 @@
           | list
           | unique
         }}
+    tags: audit
 
   - name: Include pool members fetch task
     include_role:
@@ -53,6 +77,7 @@
       label: "{{ item }}"
     vars:
       pool_name: "{{ item }}"
+    tags: audit
 
   - name: Include pool stats fetch task
     include_role:
@@ -62,11 +87,12 @@
       label: "{{ item }}"
     vars:
       pool_name: "{{ item }}"
-
+    tags: audit
 
   - name: show pool stat
     debug:
       var: pool_stats_responses[0].json.entries
+    tags: audit
 
   - name: Combine pool members with availability and enabled status=
     set_fact:
@@ -80,7 +106,7 @@
         wip: "{{ wip_name }}"
         pool: "{{ pool_name }}"
         members: >-
-          {%- set enriched_members = [] -%}
+          {%- set enriched_members§§ = [] -%}
           {%- for member in members -%}
             {%- set stat_path = 'https://localhost/mgmt/tm/gtm/pool/a/~Common~' ~ pool_name ~ '/members/~Common~' ~ member.name ~ ':~Common~' ~ member.subPath.split(':')[0] ~ '/stats' -%}
             {%- set stat = stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) -%}
@@ -96,17 +122,17 @@
     loop: "{{ range(0, pool_list | length) | list }}"
     loop_control:
       label: "{{ pool_list[item] }}"
-
+    tags: audit
 
   - name: show combined
     debug:
       var: combined_pools
+    tags: audit
 
   - name: Initialize availability_check
     set_fact:
       availability_check: []
-  
-
+    tags: audit
   - name: Determine availability and disable eligibility for secondary members (loop)
     set_fact:
       availability_check: "{{ availability_check + [ new_entry ] }}"
@@ -127,11 +153,12 @@
     loop_control:
       loop_var: pool_item
       label: "{{ pool_item.pool }}"
+    tags: audit
 
   - name: debug
     debug:
       var: availability_check 
-
+    tags: audit
 
   - name: Log GTM pools with eligibility for secondary member disable
     debug:
@@ -144,7 +171,7 @@
     loop: "{{ availability_check }}"
     loop_control:
       label: "{{ item.pool }}"
-
+    tags: audit
 
   - name: Include disable member task for each eligible pool
     include_role:
@@ -154,11 +181,12 @@
       label: "{{ item.pool }}"
     vars:
       current_item: "{{ item }}"
+    tags: change
 
   - name: Include post-disable verification task
     include_role:
       name: post_disable_check
-
+    tags: change
 
   - name: Assert secondary member is disabled after patch
     assert:
@@ -172,3 +200,4 @@
     when: 
      - post_check_response is defined
      - "'json' in item"
+    tags: audit
