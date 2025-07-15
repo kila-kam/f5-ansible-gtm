@@ -99,6 +99,8 @@
           {%- set enriched = enriched + [ {
             'name': member.name,
             'device_name': device_name,
+            'stat_path': stat_path,
+            'stat_found': stat != {},
             'availability': stat.get('status.availabilityState', {}).get('description', 'unknown'),
             'enabled': stat.get('status.enabledState', {}).get('description', 'unknown')
           } ] -%}
