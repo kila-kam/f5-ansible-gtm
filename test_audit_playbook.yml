@@ -66,75 +66,75 @@
 
 
 
- # - name: Build combined_pools without block+loop or custom filters
- #   set_fact:
- #     combined_pools: "{{ combined_pools | default([])+ [combined_entry] }}"
- #   vars:
- #     pool_index: "{{ item }}"
- #     wip_name: "{{ gslb_wip[pool_index] }}"
- #     pool_name: "{{ pool_list[pool_index] }}"
- #     members: "{{ pool_members_responses[pool_index]['json']['items'] }}"
- #     stats: "{{ pool_stats_responses[pool_index].json.entries }}"
- #     enriched_members: >-
- #       {%- set enriched = [] -%}
- #       {%- for member in members -%}
- #         {%- set subpath = member.subPath -%}
- #         {%- set device_name = subpath.split(':')[0] if ':' in subpath else subpath -%}
- #         {%- set stat_path = 'https://localhost/mgmt/tm/gtm/pool/a/~Common~' ~ pool_name ~ '/members/~Common~' ~ member.name ~ ':~Common~' ~ device_name ~ '/stats' -%}
- #         {%- set stat = stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) -%}
- #         {%- set enriched = enriched + [ {
- #           'name': member.name,
- #           'device_name': device_name,
- #           'availability': stat.get('status.availabilityState', {}).get('description', 'unknown'),
- #           'enabled': stat.get('status.enabledState', {}).get('description', 'unknown')
- #         } ] -%}
- #       {%- endfor -%}
- #       {{ enriched }}
- #     combined_entry:
- #       wip: "{{ wip_name }}"
- #       pool: "{{ pool_name }}"
- #       members: "{{ enriched_members }}"
- #   loop: "{{ range(0, pool_list | length) | list }}"
- #   loop_control:
- #     loop_var: item
-#
- # - name: show combined data
- #   debug:
- #     var: combined_pools
-#
- # - name: Determine disabled secondary members for enabling
- #   set_fact:
- #     availability_check: "{{ availability_check | default([]) + [ new_entry ] }}"
- #   vars:
- #     new_entry: >-
- #       {{
- #         pool_item
- #         | combine({
- #             'secondary_member': (
- #               pool_item.members
- #               | selectattr('name', 'defined')
- #               | selectattr('name', 'search', '(?i).*' + match_word + '.*')
- #               | selectattr('enabled', 'in', ['disabled', 'false', false])
- #               | list
- #             )[0] | default({})
- #           })
- #       }}
- #   loop: "{{ combined_pools }}"
- #   loop_control:
- #     loop_var: pool_item
- #     label: "{{ pool_item.pool }}"
- #   tags: audit
-#
- # - name: Log GTM pools with disabled secondary members for enabling
- #   debug:
- #     msg: |
- #       Pool: {{ item.pool }}
- #       WIP: {{ item.wip }}
- #       Secondary Member Found: {{ item.secondary_member.name if item.secondary_member.name is defined else 'None' }}
- #       Currently Enabled State: {{ item.secondary_member.enabled if item.secondary_member.enabled is defined else 'unknown' }}
- #       Eligible for Enable: {{ 'YES' if item.secondary_member.name is defined else 'NO' }}
- #   loop: "{{ availability_check }}"
- #   loop_control:
- #     label: "{{ item.pool }}"
- #   tags: audit
- #
+  - name: Build combined_pools without block+loop or custom filters
+    set_fact:
+      combined_pools: "{{ combined_pools | default([])+ [combined_entry] }}"
+    vars:
+      pool_index: "{{ item }}"
+      wip_name: "{{ gslb_wip[pool_index] }}"
+      pool_name: "{{ pool_list[pool_index] }}"
+      members: "{{ pool_members_responses[pool_index]['json']['items'] }}"
+      stats: "{{ pool_stats_responses[pool_index].json.entries }}"
+      enriched_members: >-
+        {%- set enriched = [] -%}
+        {%- for member in members -%}
+          {%- set subpath = member.subPath -%}
+          {%- set device_name = subpath.split(':')[0] if ':' in subpath else subpath -%}
+          {%- set stat_path = 'https://localhost/mgmt/tm/gtm/pool/a/~Common~' ~ pool_name ~ '/members/~Common~' ~ member.name ~ ':~Common~' ~ device_name ~ '/stats' -%}
+          {%- set stat = stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) -%}
+          {%- set enriched = enriched + [ {
+            'name': member.name,
+            'device_name': device_name,
+            'availability': stat.get('status.availabilityState', {}).get('description', 'unknown'),
+            'enabled': stat.get('status.enabledState', {}).get('description', 'unknown')
+          } ] -%}
+        {%- endfor -%}
+        {{ enriched }}
+      combined_entry:
+        wip: "{{ wip_name }}"
+        pool: "{{ pool_name }}"
+        members: "{{ enriched_members }}"
+    loop: "{{ range(0, pool_list | length) | list }}"
+    loop_control:
+      loop_var: item
+
+  - name: show combined data
+    debug:
+      var: combined_pools
+
+  - name: Determine disabled secondary members for enabling
+    set_fact:
+      availability_check: "{{ availability_check | default([]) + [ new_entry ] }}"
+    vars:
+      new_entry: >-
+        {{
+          pool_item
+          | combine({
+              'secondary_member': (
+                pool_item.members
+                | selectattr('name', 'defined')
+                | selectattr('name', 'search', '(?i).*' + match_word + '.*')
+                | selectattr('enabled', 'in', ['disabled', 'false', false])
+                | list
+              )[0] | default({})
+            })
+        }}
+    loop: "{{ combined_pools }}"
+    loop_control:
+      loop_var: pool_item
+      label: "{{ pool_item.pool }}"
+    tags: audit
+
+  - name: Log GTM pools with disabled secondary members for enabling
+    debug:
+      msg: |
+        Pool: {{ item.pool }}
+        WIP: {{ item.wip }}
+        Secondary Member Found: {{ item.secondary_member.name if item.secondary_member.name is defined else 'None' }}
+        Currently Enabled State: {{ item.secondary_member.enabled if item.secondary_member.enabled is defined else 'unknown' }}
+        Eligible for Enable: {{ 'YES' if item.secondary_member.name is defined else 'NO' }}
+    loop: "{{ availability_check }}"
+    loop_control:
+      label: "{{ item.pool }}"
+    tags: audit
+ 
