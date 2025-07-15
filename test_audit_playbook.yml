@@ -29,25 +29,17 @@
       var: pool_list
 
 
-  - name: Debug for each member enrichment
+  - name: Debug members list before enrichment
     debug:
       msg:
-        - "item: {{ item }}"
-        - "pool_name: {{ pool_name }}"
-        - "member: {{ member.name }} | subPath: {{ member.subPath }}"
-        - "device_name: {{ device_name }}"
-        - "constructed stat_path: {{ stat_path }}"
-        - "stat found: {{ stat }}"
-    loop: "{{ members }}"
-    loop_control:
-      label: "{{ member.name }}"
+        - "Processing pool: {{ pool_list[item] }}"
+        - "Members input: {{ members }}"
     vars:
       members: "{{ pool_members_responses[item]['json']['items'] }}"
-      stats: "{{ pool_stats_responses[item].json.entries }}"
-      subpath: "{{ member.subPath }}"
-      device_name: "{{ subpath.split(':')[0] if ':' in subpath else subpath }}"
-      stat_path: "https://localhost/mgmt/tm/gtm/pool/a/~Common~{{ pool_name }}/members/~Common~{{ member.name }}:~Common~{{ device_name }}/stats"
-      stat: "{{ stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) }}"
+    loop: "{{ range(0, pool_list | length) | list }}"
+    loop_control:
+      loop_var: item
+
 
 
   #- name: Combine pool members with availability and enabled status
