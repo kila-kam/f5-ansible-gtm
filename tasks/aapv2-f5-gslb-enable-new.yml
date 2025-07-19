@@ -123,10 +123,6 @@
       loop_var: item
     tags: audit
 
-  - name: Show combined_pools for verification
-    debug:
-      var: combined_pools
-    tags: audit
 
   - name: Determine disabled secondary members for enabling
     set_fact:

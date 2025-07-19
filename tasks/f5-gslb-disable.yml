@@ -89,11 +89,6 @@
       pool_name: "{{ item }}"
     tags: audit
 
-  - name: show pool stat
-    debug:
-      var: pool_stats_responses[0].json.entries
-    tags: audit
-
   - name: Combine pool members with availability and enabled status=
     set_fact:
       combined_pools: "{{ combined_pools | default([]) + [combined_entry] }}"
@@ -106,7 +101,7 @@
         wip: "{{ wip_name }}"
         pool: "{{ pool_name }}"
         members: >-
-          {%- set enriched_members§§ = [] -%}
+          {%- set enriched_members = [] -%}
           {%- for member in members -%}
             {%- set stat_path = 'https://localhost/mgmt/tm/gtm/pool/a/~Common~' ~ pool_name ~ '/members/~Common~' ~ member.name ~ ':~Common~' ~ member.subPath.split(':')[0] ~ '/stats' -%}
             {%- set stat = stats.get(stat_path, {}).get('nestedStats', {}).get('entries', {}) -%}
@@ -124,10 +119,6 @@
       label: "{{ pool_list[item] }}"
     tags: audit
 
-  - name: show combined
-    debug:
-      var: combined_pools
-    tags: audit
 
   - name: Initialize availability_check
     set_fact:
