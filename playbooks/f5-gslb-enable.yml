@@ -57,16 +57,6 @@
          Match Word: {{ match_word | default('N/A') }}
 
 
-  - name: Validate selected_wip exists in wip_configs
-    assert:
-      that: "'{{ selected_wip }}' in wip_configs"
-      fail_msg: "Invalid selected_wip '{{ selected_wip }}'. Available options: {{ wip_configs.keys() | list }}"
-
-  - name: Set selected WIP configuration
-    set_fact:
-      gslb_wip: "{{ wip_configs[selected_wip].gslb_wip }}"
-      match_word: "{{ wip_configs[selected_wip].match_word }}"
-
   - name: Debug selected WIP config
     debug:
       msg:
