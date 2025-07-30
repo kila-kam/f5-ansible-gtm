@@ -1,0 +1,57 @@
+---
+- name: gslb wip audit and secondary member disable
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    wip_configs:
+      auction:
+        gslb_wip:
+          - wip1.test.com
+          - wip2.test.com
+        match_word: server1
+      finance:
+        gslb_wip:
+          - wip3.test.com
+          - wip4.test.com 
+        match_word: server2
+
+  tasks:
+    - name: Determine selected WIP keys
+      set_fact:
+        selected_keys: >-
+          {{
+            wip_configs.keys() | list
+            if selected_wip | lower == 'all'
+            else selected_wip.split(',') | map('trim') | list
+          }}
+
+    - name: Show selected keys
+      debug:
+        var: selected_keys
+
+    - name: Flatten all selected gslb_wip values
+      set_fact:
+        gslb_wip: >-
+          {{
+            selected_keys
+            | map('extract', wip_configs, 'gslb_wip')
+            | flatten 
+            | list
+          }}
+
+    - name: Show gslb wip
+      debug:
+        var: gslb_wip
+
+    - name: Set match_word if only one group selected
+      set_fact:
+        match_word: "{{ wip_configs[selected_keys[0]].match_word }}"
+      when: selected_keys | length == 1
+
+    - name: Display selected WIPs and match_word
+      debug:
+        msg: |
+          Selected WIPs: {{ gslb_wip }}
+          Match Word: {{ match_word | default('N/A') }}

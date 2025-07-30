@@ -1,0 +1,24 @@
+- name: gslb wip audit and secondary member disable
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars_files:
+    - test_data.yml  # ← loads your prepared static test data
+
+  tasks:
+
+  - name: Extract pool names from WideIP responses
+    # This extracts the first pool name from each wideip response json
+    set_fact:
+      pool_list: >-
+        {{
+          wideip_responses
+          | map(attribute='json')
+          | selectattr('name', 'in', gslb_wip)
+          | map(attribute='pools')
+          | map('first')
+          | map(attribute='name')
+          | list
+          | unique
+        }}
